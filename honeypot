@@ -1,0 +1,293 @@
+class TransactionCore {
+    constructor(securityManager, activeDefense, sanitizer, honeypot) {
+        // Проверка зависимостей
+        if (!securityManager || !activeDefense || !sanitizer || !honeypot) {
+            throw new Error("Все зависимости (securityManager, activeDefense, sanitizer, honeypot) должны быть предоставлены");
+        }
+        this.securityManager = securityManager;
+        this.activeDefense = activeDefense;
+        this.sanitizer = sanitizer;
+        this.honeypot = honeypot;
+        this.txCache = new Map();
+        this.pendingTxQueue = new Map();
+        this.worker = null;
+        this.currentAccount = null;
+        this.gasPriceCache = null;
+        this.lastGasUpdate = 0;
+        this.gasPriceHistory = [];
+        this.minGasPrice = null;
+        this.maxGasPrice = null;
+        this.initWorker();
+    }
+
+    // Инициализация Web Worker с логированием
+    initWorker() {
+        if (typeof Worker !== 'undefined') {
+            this.worker = new Worker(URL.createObjectURL(new Blob([`
+                self.onmessage = async function(e) {
+                    const { type, data } = e.data;
+                    if (type === 'validateTx') {
+                        const { to, value } = data;
+                        const isValidAddress = /^0x[0-9a-fA-F]{40}$/.test(to);
+                        const isValidAmount = !isNaN(parseFloat(value)) && parseFloat(value) > 0;
+                        self.postMessage({ isValidAddress, isValidAmount });
+                    } else if (type === 'encrypt') {
+                        self.postMessage({ result: JSON.stringify(data) });
+                    }
+                };
+            `], { type: 'application/javascript' })));
+        } else {
+            console.warn("Web Worker не поддерживается, используется локальная валидация");
+            this.honeypot.logSecurityEvent('worker_unavailable', { timestamp: Date.now() });
+        }
+    }
+
+    // Установка текущего аккаунта
+    setCurrentAccount(account) {
+        this.currentAccount = account;
+    }
+
+    // Установка минимального и максимального gasPrice
+    setGasPriceLimits(minGasPrice, maxGasPrice) {
+        this.minGasPrice = minGasPrice ? BigInt(minGasPrice) : null;
+        this.maxGasPrice = maxGasPrice ? BigInt(maxGasPrice) : null;
+    }
+
+    // Валидация параметров с проверкой входных данных
+    async validateTransactionParams(to, value) {
+        if (typeof to !== 'string' || to === '' || value == null) {
+            throw new Error("Некорректные параметры: 'to' должен быть строкой, 'value' не может быть null/undefined");
+        }
+        const cacheKey = `${to}_${value}`;
+        if (this.txCache.has(cacheKey)) {
+            return this.txCache.get(cacheKey);
+        }
+
+        const [validAddress, validAmount] = await Promise.all([
+            this.worker ? this.validateInWorker(to, value) : this.localValidate(to, value),
+            this.sanitizer.validateTransactionAmount(value)
+        ]);
+
+        const result = {
+            validAddress: validAddress.isValidAddress,
+            validAmount: validAmount !== null
+        };
+
+        this.txCache.set(cacheKey, result);
+        return result;
+    }
+
+    validateInWorker(to, value) {
+        return new Promise((resolve) => {
+            this.worker.onmessage = (e) => resolve(e.data);
+            this.worker.postMessage({ type: 'validateTx', data: { to, value } });
+        });
+    }
+
+    localValidate(to, value) {
+        return Promise.resolve({
+            isValidAddress: this.sanitizer.validateEthAddress(to),
+            isValidAmount: !isNaN(parseFloat(value)) && parseFloat(value) > 0
+        });
+    }
+
+    // Расчет среднего gasPrice за последние 10 блоков
+    async calculateAverageGasPrice() {
+        const latestBlockNumber = await web3.eth.getBlockNumber();
+        const blocksToCheck = Math.min(10, latestBlockNumber);
+        const gasPrices = [];
+
+        for (let i = 0; i < blocksToCheck; i++) {
+            try {
+                const block = await web3.eth.getBlock(latestBlockNumber - i, true);
+                if (block.transactions && block.transactions.length > 0) {
+                    const avgTxGasPrice = block.transactions
+                        .filter(tx => tx.gasPrice)
+                        .reduce((sum, tx) => sum + BigInt(tx.gasPrice), BigInt(0)) / BigInt(block.transactions.length);
+                    gasPrices.push(avgTxGasPrice);
+                } else {
+                    gasPrices.push(BigInt(await web3.eth.getGasPrice()));
+                }
+            } catch (error) {
+                gasPrices.push(BigInt(await web3.eth.getGasPrice()));
+                console.warn(`Ошибка при получении блока ${latestBlockNumber - i}: ${error.message}`);
+            }
+        }
+
+        const averageGasPrice = gasPrices.reduce((sum, price) => sum + price, BigInt(0)) / BigInt(gasPrices.length);
+        this.gasPriceHistory = gasPrices.slice(-10);
+        return averageGasPrice;
+    }
+
+    // Адаптивный расчет газа с повторными попытками
+    async calculateAdaptiveGas(to, value) {
+        if (!this.currentAccount) {
+            throw new Error("Текущий аккаунт не установлен");
+        }
+        if (isNaN(parseFloat(value)) || parseFloat(value) <= 0) {
+            throw new Error("Некорректное значение 'value'");
+        }
+
+        const amountWei = web3.utils.toWei(value.toString(), 'ether');
+        let baseGas;
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                baseGas = await web3.eth.estimateGas({ to, value: amountWei, from: this.currentAccount });
+                break;
+            } catch (error) {
+                if (attempt === 2) throw new Error("Не удалось оценить gas: " + error.message);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
+
+        const now = Date.now();
+        if (!this.gasPriceCache || (now - this.lastGasUpdate > 30000)) {
+            let networkGasPrice, block;
+            for (let attempt = 0; attempt < 3; attempt++) {
+                try {
+                    [networkGasPrice, block] = await Promise.all([
+                        web3.eth.getGasPrice(),
+                        web3.eth.getBlock('latest')
+                    ]);
+                    break;
+                } catch (error) {
+                    if (attempt === 2) throw new Error("Не удалось получить данные сети: " + error.message);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+
+            const averageGasPrice = await this.calculateAverageGasPrice();
+            const networkCongestion = block.gasUsed / block.gasLimit;
+            let adjustedGasPrice = (BigInt(networkGasPrice) + averageGasPrice) / BigInt(2);
+
+            if (networkCongestion > 0.9) {
+                adjustedGasPrice = adjustedGasPrice * BigInt(120) / BigInt(100);
+            } else if (networkCongestion < 0.3) {
+                adjustedGasPrice = adjustedGasPrice * BigInt(90) / BigInt(100);
+            }
+
+            if (this.minGasPrice && adjustedGasPrice < this.minGasPrice) {
+                adjustedGasPrice = this.minGasPrice;
+            }
+            if (this.maxGasPrice && adjustedGasPrice > this.maxGasPrice) {
+                adjustedGasPrice = this.maxGasPrice;
+            }
+
+            const threshold = averageGasPrice * BigInt(2);
+            if (adjustedGasPrice > threshold) {
+                showSecurityWarning(
+                    `Внимание: GasPrice (${web3.utils.fromWei(adjustedGasPrice, 'gwei')} Gwei) значительно выше среднего (${web3.utils.fromWei(averageGasPrice, 'gwei')} Gwei). Возможна аномалия в сети.`
+                );
+            }
+
+            this.gasPriceCache = adjustedGasPrice.toString();
+            this.lastGasUpdate = now;
+        }
+
+        const adjustedGas = Math.floor(baseGas * 1.1);
+        return {
+            gas: web3.utils.toHex(adjustedGas),
+            gasPrice: web3.utils.toHex(this.gasPriceCache)
+        };
+    }
+
+    // Подготовка параметров транзакции
+    async prepareTransaction(to, value) {
+        const amountWei = web3.utils.toWei(value.toString(), 'ether');
+        const { gas, gasPrice } = await this.calculateAdaptiveGas(to, value);
+        return {
+            from: this.currentAccount,
+            to,
+            value: web3.utils.toHex(amountWei),
+            gas,
+            gasPrice
+        };
+    }
+
+    // Основная функция обработки транзакции с таймаутами
+    async processTransaction(to, value) {
+        try {
+            if (!this.securityManager.validateSession()) {
+                const mfaPromise = this.activeDefense.performMultiFactorAuth('restart_secure_session');
+                const mfaResult = await Promise.race([
+                    mfaPromise,
+                    new Promise((_, reject) => setTimeout(() => reject(new Error("Таймаут MFA")), 30000))
+                ]);
+                this.securityManager.startSecureSession();
+            }
+
+            const validation = await this.validateTransactionParams(to, value);
+            if (!validation.validAddress || !validation.validAmount) {
+                throw new Error(!validation.validAddress ? "Некорректный адрес" : "Некорректная сумма");
+            }
+
+            const txParams = await this.prepareTransaction(to, value);
+            const [isValidTx, confirmation] = await Promise.all([
+                this.activeDefense.validateTransaction(txParams),
+                this.securityManager.confirmTransaction(txParams)
+            ]);
+
+            if (!isValidTx || !confirmation.confirmed) {
+                throw new Error(!isValidTx ? "Транзакция не прошла проверку" : "Транзакция не подтверждена");
+            }
+
+            const txPromise = this.activeDefense.sendProtectedTransaction(txParams);
+            const txId = `${Date.now()}_${to}`;
+            this.pendingTxQueue.set(txId, txPromise);
+
+            const receipt = await Promise.race([
+                txPromise,
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Таймаут отправки транзакции")), 60000))
+            ]);
+            const txHash = receipt.transactionHash;
+            this.pendingTxQueue.delete(txId);
+
+            await this.securityManager.secureStore(`tx_${txHash}`, {
+                params: txParams,
+                hash: txHash,
+                timestamp: Date.now()
+            });
+
+            this.honeypot.logSecurityEvent('transaction_sent', {
+                hash: txHash,
+                to,
+                valueEth: value,
+                gas: txParams.gas,
+                gasPrice: txParams.gasPrice
+            });
+
+            return { success: true, hash: txHash };
+        } catch (error) {
+            this.honeypot.logSecurityEvent('transaction_error', {
+                error: error.message,
+                to,
+                valueEth: value
+            });
+            return { success: false, reason: error.message || 'Неизвестная ошибка' };
+        }
+    }
+
+    // Получение статуса ожидающих транзакций
+    getPendingTransactions() {
+        return Array.from(this.pendingTxQueue.entries()).map(([id, promise]) => ({
+            id,
+            status: 'pending'
+        }));
+    }
+
+    // Очистка кэша
+    clearCache() {
+        this.txCache.clear();
+        this.gasPriceCache = null;
+        this.lastGasUpdate = 0;
+        this.gasPriceHistory = [];
+    }
+}
+
+// Инициализация ядра
+window.transactionCore = new TransactionCore(
+    window.securityManager,
+    window.activeDefense,
+    window.sanitizer,
+    window.honeypot
+);
