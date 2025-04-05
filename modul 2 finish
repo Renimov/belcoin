@@ -1,0 +1,448 @@
+// Пример полной интеграции всех модулей безопасности в web3-приложение
+
+// Инициализация всей системы безопасности
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        console.log("🔒 Инициализация системы безопасности MasterKate Web3...");
+        
+        // 1. Инициализация криптографического модуля безопасности
+        window.securityManager = new CryptoSecurityManager();
+        await window.securityManager.initialize();
+        console.log("✓ Криптографический модуль активирован");
+        
+        // 2. Создание системы-песочницы (Honeypot)
+        window.honeypot = new HoneypotSystem(window.securityManager);
+        console.log("✓ Система-песочница инициализирована");
+        
+        // 3. Добавление перехватчиков атак
+        window.interceptors = new CompactInterceptors(window.honeypot);
+        console.log("✓ Перехватчики атак установлены");
+        
+        // 4. Инициализация санитайзера для защиты от инъекций
+        window.sanitizer = new SecuritySanitizer();
+        console.log("✓ Защита от инъекций активирована");
+
+        // 5. Инициализация ActiveDefenseSystem
+        window.activeDefense = new ActiveDefenseSystem(window.honeypot, window.securityManager);
+        console.log("✓ ActiveDefenseSystem инициализирован");
+        
+        // 6. Проверка безопасности устройства
+        if (window.securityManager.detectDeviceTampering()) {
+            console.warn("⚠️ Обнаружены признаки взлома устройства!");
+            showSecurityWarning("Обнаружены признаки взлома устройства. Это может снизить безопасность ваших криптоактивов.");
+        }
+        
+        // 7. Запуск защищенного сеанса с MFA
+        await window.activeDefense.performMultiFactorAuth('start_secure_session');
+        window.securityManager.startSecureSession();
+        console.log("✓ Защищенный сеанс запущен");
+        
+        // 8. Периодическая отправка логов безопасности
+        setupAutoSend();
+        
+        console.log("✅ Система безопасности полностью инициализирована");
+    } catch (error) {
+        console.error("❌ Ошибка при инициализации системы безопасности:", error);
+    }
+});
+
+// Настройка автоматической отправки логов безопасности
+function setupAutoSend() {
+    setInterval(async function() {
+        try {
+            const logs = await window.honeypot.getLogs();
+            const encryptedLogs = await window.activeDefense.encryptData(JSON.stringify(logs));
+            await window.honeypot.sendEncryptedLogsToServer(encryptedLogs);
+            console.log("✓ Зашифрованные логи безопасности успешно отправлены");
+        } catch (e) {
+            console.error("Ошибка при отправке логов:", e);
+        }
+    }, 3600000); // 1 час
+}
+
+// Функция безопасного подключения к кошельку MetaMask
+async function secureConnectWallet() {
+    try {
+        if (!(await window.securityManager.verifyAppIntegrity())) {
+            showSecurityAlert("Обнаружены проблемы с целостностью приложения. Операция отменена.");
+            return false;
+        }
+
+        const biometricSuccess = await window.activeDefense.performBiometricAuth();
+        if (!biometricSuccess) {
+            showSecurityAlert("Не удалось пройти биометрическую аутентификацию.");
+            return false;
+        }
+
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        currentAccount = accounts[0];
+        
+        await window.securityManager.secureStore('last_connection', {
+            address: currentAccount,
+            timestamp: Date.now(),
+            device: navigator.userAgent
+        });
+        
+        walletAddress.textContent = currentAccount;
+        walletInfo.classList.remove('hidden');
+        connectMetamaskBtn.classList.add('hidden');
+        disconnectWalletBtn.classList.remove('hidden');
+        
+        updateWalletBalance();
+        
+        return true;
+    } catch (error) {
+        console.error('Ошибка при безопасном подключении к кошельку:', error);
+        showSecurityAlert("Не удалось безопасно подключиться к кошельку: " + error.message);
+        return false;
+    }
+}
+
+// Функция безопасной отправки транзакции
+async function secureSendTransaction(to, value) {
+    try {
+        if (!window.securityManager.validateSession()) {
+            showSecurityAlert("Ваша сессия истекла. Пожалуйста, подтвердите транзакцию снова.");
+            await window.activeDefense.performMultiFactorAuth('restart_secure_session');
+            window.securityManager.startSecureSession();
+        }
+        
+        const validAddress = window.sanitizer.validateEthAddress(to);
+        if (!validAddress) {
+            showSecurityAlert("Некорректный Ethereum-адрес получателя");
+            return { success: false };
+        }
+        
+        const validAmount = window.sanitizer.validateTransactionAmount(value);
+        if (validAmount === null) {
+            showSecurityAlert("Некорректная сумма транзакции");
+            return { success: false };
+        }
+        
+        const amountWei = web3.utils.toWei(value, 'ether');
+        const txParams = {
+            from: currentAccount,
+            to: validAddress,
+            value: web3.utils.toHex(amountWei)
+        };
+
+        const isValidTx = await window.activeDefense.validateTransaction(txParams);
+        if (!isValidTx) {
+            showSecurityAlert("Транзакция не прошла проверку безопасности.");
+            return { success: false };
+        }
+
+        const confirmation = await window.securityManager.confirmTransaction(txParams);
+        if (!confirmation.confirmed) {
+            return { success: false, reason: 'Транзакция не подтверждена пользователем' };
+        }
+        
+        const receipt = await window.activeDefense.sendProtectedTransaction(txParams);
+        const txHash = receipt.transactionHash;
+        
+        await window.securityManager.secureStore(`tx_${txHash}`, {
+            params: txParams,
+            hash: txHash,
+            timestamp: Date.now()
+        });
+        
+        window.honeypot.logSecurityEvent('transaction_sent', {
+            hash: txHash,
+            to: validAddress,
+            valueEth: value
+        });
+        
+        return { success: true, hash: txHash };
+    } catch (error) {
+        console.error('Ошибка при отправке транзакции:', error);
+        window.honeypot.logSecurityEvent('transaction_error', {
+            error: error.message,
+            to: to,
+            valueEth: value
+        });
+        return { success: false, reason: error.message || 'Неизвестная ошибка' };
+    }
+}
+
+// Безопасная проверка адреса Ethereum
+async function secureCheckAddress(address) {
+    try {
+        const cleanAddress = window.sanitizer.validateEthAddress(address);
+        if (!cleanAddress) {
+            showSecurityAlert("Некорректный формат Ethereum-адреса");
+            return null;
+        }
+
+        const reputation = await window.activeDefense.evaluateContractReputation(cleanAddress);
+        if (reputation < 50) {
+            showSecurityWarning(`Адрес ${cleanAddress} имеет низкую репутацию (${reputation}). Будьте осторожны!`);
+        }
+        
+        window.honeypot.logSecurityEvent('address_check', {
+            address: cleanAddress,
+            time: new Date().toISOString(),
+            reputation
+        });
+        
+        const balance = await web3.eth.getBalance(cleanAddress);
+        const txCount = await web3.eth.getTransactionCount(cleanAddress);
+        
+        return {
+            address: cleanAddress,
+            balance: web3.utils.fromWei(balance, 'ether'),
+            transactionCount: txCount
+        };
+    } catch (error) {
+        console.error('Ошибка при проверке адреса:', error);
+        return null;
+    }
+}
+
+// Функция безопасного отображения данных из блокчейна
+function safeRenderBlockchainData(data, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    
+    container.innerHTML = '';
+    
+    if (data === null || data === undefined) {
+        const message = window.sanitizer.createSafeElement('p', { class: 'error-message' }, 'Нет данных для отображения');
+        container.appendChild(message);
+        return;
+    }
+    
+    if (typeof data === 'object') {
+        if (Array.isArray(data)) {
+            const list = window.sanitizer.createSafeElement('ul', { class: 'data-list' });
+            
+            for (const item of data) {
+                const listItem = window.sanitizer.createSafeElement('li', { class: 'data-item' });
+                
+                if (typeof item === 'object') {
+                    const nestedContainer = window.sanitizer.createSafeElement('div', { class: 'nested-data' });
+                    safeRenderBlockchainData(item, nestedContainer.id);
+                    listItem.appendChild(nestedContainer);
+                } else {
+                    listItem.textContent = String(item);
+                }
+                
+                list.appendChild(listItem);
+            }
+            
+            container.appendChild(list);
+        } else {
+            const table = window.sanitizer.createSafeElement('table', { class: 'data-table' });
+            
+            for (const [key, value] of Object.entries(data)) {
+                const row = window.sanitizer.createSafeElement('tr');
+                
+                const keyCell = window.sanitizer.createSafeElement('td', { class: 'key-cell' }, key);
+                row.appendChild(keyCell);
+                
+                const valueCell = window.sanitizer.createSafeElement('td', { class: 'value-cell' });
+                
+                if (typeof value === 'object' && value !== null) {
+                    const nestedContainer = window.sanitizer.createSafeElement('div', { class: 'nested-data' });
+                    safeRenderBlockchainData(value, nestedContainer.id);
+                    valueCell.appendChild(nestedContainer);
+                } else {
+                    valueCell.textContent = String(value);
+                }
+                
+                row.appendChild(valueCell);
+                table.appendChild(row);
+            }
+            
+            container.appendChild(table);
+        }
+    } else {
+        const textElement = window.sanitizer.createSafeElement('div', { class: 'text-data' }, String(data));
+        container.appendChild(textElement);
+    }
+}
+
+// Открытие административной панели Honeypot (только для владельца)
+async function openAdminPanel(adminToken, privateKeyData) {
+    try {
+        const credentials = {
+            token: adminToken,
+            privateKey: privateKeyData
+        };
+
+        const biometricSuccess = await window.activeDefense.performBiometricAuth();
+        if (!biometricSuccess) {
+            showSecurityAlert("Не удалось пройти биометрическую аутентификацию для доступа к админ-панели.");
+            return false;
+        }
+
+        const adminAccessCode = `
+            async () => {
+                const securityReport = await window.honeypot.getAdminAccessToLogs(${JSON.stringify(credentials)});
+                return securityReport;
+            }
+        `;
+        const securityReport = await window.activeDefense.executeInSandbox(adminAccessCode, credentials);
+        
+        if (!securityReport) {
+            showSecurityAlert("Доступ запрещен: неверные учетные данные администратора");
+            return false;
+        }
+        
+        const adminPanel = new HoneypotAdminPanel(securityReport);
+        adminPanel.show();
+        
+        return true;
+    } catch (error) {
+        console.error("Ошибка при открытии административной панели:", error);
+        showSecurityAlert("Не удалось открыть административную панель: " + error.message);
+        return false;
+    }
+}
+
+// Показ предупреждения о безопасности
+function showSecurityWarning(message) {
+    const warningElement = document.createElement('div');
+    warningElement.className = 'security-warning';
+    warningElement.innerHTML = `
+        <div class="warning-content">
+            <div class="warning-icon">⚠️</div>
+            <div class="warning-message">${window.sanitizer.sanitizeInput(message)}</div>
+            <button class="warning-close">✕</button>
+        </div>
+    `;
+    
+    document.body.appendChild(warningElement);
+    
+    warningElement.querySelector('.warning-close').addEventListener('click', function() {
+        warningElement.remove();
+    });
+    
+    setTimeout(() => {
+        if (document.body.contains(warningElement)) {
+            warningElement.remove();
+        }
+    }, 10000);
+}
+
+// Показ критического предупреждения о безопасности
+function showSecurityAlert(message) {
+    const alertElement = document.createElement('div');
+    alertElement.className = 'security-alert';
+    alertElement.innerHTML = `
+        <div class="alert-content">
+            <div class="alert-icon">🛑</div>
+            <div class="alert-message">${window.sanitizer.sanitizeInput(message)}</div>
+            <button class="alert-confirm">Понятно</button>
+        </div>
+    `;
+    
+    document.body.appendChild(alertElement);
+    
+    return new Promise((resolve) => {
+        alertElement.querySelector('.alert-confirm').addEventListener('click', function() {
+            alertElement.remove();
+            resolve(true);
+        });
+    });
+}
+
+// Добавляем стили для предупреждений безопасности
+(function addSecurityStyles() {
+    const styles = document.createElement('style');
+    styles.textContent = `
+        .security-warning {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 400px;
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            animation: slideIn 0.3s ease forwards;
+        }
+        
+        .security-alert {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 10000;
+            animation: fadeIn 0.2s ease forwards;
+        }
+        
+        .warning-content {
+            padding: 15px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .alert-content {
+            background-color: #fff;
+            max-width: 500px;
+            width: 90%;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .warning-icon, .alert-icon {
+            font-size: 24px;
+            margin-right: 10px;
+        }
+        
+        .alert-icon {
+            font-size: 36px;
+            margin-bottom: 15px;
+        }
+        
+        .warning-message, .alert-message {
+            flex: 1;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        
+        .alert-message {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .warning-close {
+            background: none;
+            border: none;
+            font-size: 16px;
+            cursor: pointer;
+            color: #666;
+        }
+        
+        .alert-confirm {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    `;
+    
+    document.head.appendChild(styles);
+})();
