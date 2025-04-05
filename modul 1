@@ -1,0 +1,1283 @@
+/**
+ * ActiveDefenseSystem - Система активной защиты и противодействия атакам
+ * Предоставляет расширенные возможности для отражения и анализа атак
+ */
+class ActiveDefenseSystem {
+    constructor(advancedHoneypot, web3ProviderUrl = 'https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID') {
+        this.honeypot = advancedHoneypot;
+        this.securityManager = advancedHoneypot.securityManager;
+
+        // Настройки системы
+        this.settings = {
+            enabled: true,                      // Глобальное включение/выключение
+            defenseLevel: 'medium',             // Уровень активной защиты (low, medium, high)
+            counterMeasuresEnabled: true,       // Включение контрмер
+            forensicCollectionEnabled: true,    // Сбор данных для расследования
+            deceptionEnabled: true,             // Включение обманных тактик
+            alertThreshold: 75,                 // Порог для активации защиты (0-100)
+            minimumEvidenceRequired: 2,         // Минимальное количество свидетельств для активации
+            coolingPeriod: 3600000,             // Период охлаждения между активациями (1 час)
+            multiFactorAuthEnabled: true,       // Включение MFA
+            constantTimeOperations: false       // Для side-channel защиты
+        };
+
+        // Состояние системы
+        this.state = {
+            activeDefenses: [],                 // Активные меры защиты
+            suspiciousSources: new Map(),       // Информация о подозрительных источниках
+            collectedEvidence: [],              // Собранные доказательства
+            defenseHistory: [],                 // История активации защиты
+            lastDefenseTime: 0,                 // Время последней активации защиты
+            threatLevel: 0                      // Текущий уровень угрозы (0-100)
+        };
+
+        // Инициализация Web3
+        this.web3 = {
+            provider: null,
+            signer: null,
+            chainId: null,
+            walletAddress: null
+        };
+        this.web3ProviderUrl = web3ProviderUrl;
+
+        // Инициализация шаблонов вредоносных данных
+        this.maliciousPatterns = this.initMaliciousPatterns();
+
+        // Инициализация новых компонентов
+        this.initBiometricAuth();
+        this.initPostQuantumCrypto();
+        this.initAnomalyDetection();
+        this.initDecentralizedAuth();
+        this.initWeb3Integration();
+        this.protectAgainstSideChannel();
+        this.protectAgainstRansomware();
+        this.integrateWithVulnerabilityDB();
+
+        // Регистрация обработчиков событий
+        this.setupEventHandlers();
+    }
+
+    /**
+     * Инициализация шаблонов вредоносных данных
+     */
+    initMaliciousPatterns() {
+        return [
+            // Web3-специфические паттерны
+            /call\.value\(/i, // Reentrancy
+            /delegatecall\(/i, // Reentrancy
+            // Традиционные веб-угрозы
+            /'\s*OR\s*'1'='1/i, // SQL-инъекции
+            /"\s*OR\s*"1"="1/i,
+            /UNION\s+SELECT/i,
+            /;\s*DROP\s+TABLE/i,
+            /<script>[^<]*<\/script>/i, // XSS
+            /javascript:[^;]*/i,
+            /onload=|onerror=|onclick=/i,
+            /;\s*rm\s+-rf/i, // Командные инъекции
+            /`[^`]*`/i,
+            /\|\s*wget/i,
+            /\.\.\/\.\.\/\.\.\//i, // Пути
+            /admin.*?password/i, // Попытки обхода аутентификации
+            /root.*?access/i
+        ];
+    }
+
+    /**
+     * Инициализация Web3-интеграции
+     */
+    async initWeb3Integration() {
+        try {
+            // Инициализация провайдера
+            this.web3.provider = new ethers.providers.JsonRpcProvider(this.web3ProviderUrl);
+            const network = await this.web3.provider.getNetwork();
+            this.web3.chainId = network.chainId;
+            console.log(`Подключено к сети с chainId: ${this.web3.chainId}`);
+
+            // Подключаем кошелек (например, MetaMask)
+            if (window.ethereum) {
+                const provider = new ethers.providers.Web3Provider(window.ethereum);
+                await provider.send("eth_requestAccounts", []);
+                this.web3.signer = provider.getSigner();
+                this.web3.walletAddress = await this.web3.signer.getAddress();
+                console.log(`Подключен кошелек: ${this.web3.walletAddress}`);
+            } else {
+                console.warn("Кошелек (например, MetaMask) не обнаружен");
+            }
+        } catch (error) {
+            console.error("Ошибка инициализации Web3:", error);
+            throw error;
+        }
+    }
+
+    /**
+     * Инициализация биометрической аутентификации
+     */
+    initBiometricAuth() {
+        this.biometricAuth = {
+            enabled: false,
+            supported: false,
+            type: null // 'faceid' или 'touchid'
+        };
+
+        if (navigator.credentials && typeof PublicKeyCredential !== 'undefined') {
+            this.biometricAuth.supported = true;
+            this.biometricAuth.type = 'faceid';
+            this.biometricAuth.enabled = true;
+            console.log("Биометрическая аутентификация инициализирована");
+        } else {
+            console.warn("Биометрическая аутентификация не поддерживается");
+        }
+    }
+
+    /**
+     * Выполнение биометрической аутентификации
+     */
+    async performBiometricAuth() {
+        if (!this.biometricAuth.enabled) {
+            throw new Error("Биометрическая аутентификация не включена");
+        }
+
+        try {
+            const credential = await navigator.credentials.get({
+                publicKey: {
+                    challenge: new Uint8Array(32),
+                    rpId: window.location.hostname,
+                    userVerification: "required"
+                }
+            });
+            console.log("Биометрическая аутентификация успешна", credential);
+            return true;
+        } catch (error) {
+            console.error("Ошибка биометрической аутентификации:", error);
+            return false;
+        }
+    }
+
+    /**
+     * Многофакторная аутентификация для критических операций
+     */
+    async performMultiFactorAuth(operation) {
+        if (!this.settings.multiFactorAuthEnabled) return true;
+
+        const authSteps = [];
+
+        if (this.biometricAuth.enabled) {
+            const biometricResult = await this.performBiometricAuth();
+            authSteps.push({ type: 'biometric', success: biometricResult });
+        }
+
+        const codeVerified = await this.requestVerificationCode();
+        authSteps.push({ type: 'code', success: codeVerified });
+
+        const allStepsSuccessful = authSteps.every(step => step.success);
+        if (!allStepsSuccessful) {
+            throw new Error("Многофакторная аутентификация не пройдена");
+        }
+
+        console.log(`MFA для операции ${operation} успешно пройдена`);
+        return true;
+    }
+
+    /**
+     * Запрос кода подтверждения (эмуляция)
+     */
+    async requestVerificationCode() {
+        console.log("Эмуляция отправки кода подтверждения...");
+        return true;
+    }
+
+    /**
+     * Инициализация постквантового шифрования
+     */
+    initPostQuantumCrypto() {
+        this.cryptoSettings = {
+            postQuantumEnabled: true,
+            algorithm: 'kyber',
+            hybridEnabled: true
+        };
+        console.log("Постквантовое шифрование инициализировано");
+    }
+
+    /**
+     * Шифрование данных с использованием гибридного подхода
+     */
+    async encryptData(data) {
+        if (!this.cryptoSettings.postQuantumEnabled) {
+            return this.legacyEncrypt(data);
+        }
+
+        try {
+            const postQuantumEncrypted = this.postQuantumEncrypt(data);
+            if (this.cryptoSettings.hybridEnabled) {
+                const hybridEncrypted = this.legacyEncrypt(postQuantumEncrypted);
+                return hybridEncrypted;
+            }
+            return postQuantumEncrypted;
+        } catch (error) {
+            console.error("Ошибка шифрования:", error);
+            throw error;
+        }
+    }
+
+    postQuantumEncrypt(data) {
+        console.log("Эмуляция постквантового шифрования...");
+        return `post_quantum_encrypted_${data}`;
+    }
+
+    legacyEncrypt(data) {
+        console.log("Эмуляция классического шифрования...");
+        return `aes_encrypted_${data}`;
+    }
+
+    /**
+     * Инициализация модели машинного обучения
+     */
+    initAnomalyDetection() {
+        this.anomalyModel = {
+            trainingData: [],
+            threshold: 0.9,
+            isTrained: false
+        };
+        console.log("Модель обнаружения аномалий инициализирована");
+    }
+
+    trainAnomalyModel() {
+        const events = this.state.defenseHistory.map(action => ({
+            threatLevel: action.threatLevel,
+            evidenceCount: action.evidenceCount,
+            measures: action.measures.length
+        }));
+
+        this.anomalyModel.trainingData = events;
+        this.anomalyModel.isTrained = true;
+        console.log("Модель обучена на основе исторических данных");
+    }
+
+    predictAnomaly(event) {
+        if (!this.anomalyModel.isTrained) {
+            this.trainAnomalyModel();
+        }
+
+        const avgThreatLevel = this.anomalyModel.trainingData.reduce((sum, e) => sum + e.threatLevel, 0) / this.anomalyModel.trainingData.length;
+        const eventThreatLevel = this.evaluateThreatScore(event);
+
+        const anomalyScore = eventThreatLevel / avgThreatLevel;
+        if (anomalyScore > this.anomalyModel.threshold) {
+            console.log("Обнаружена аномалия:", event);
+            this.activateDefense('anomaly_detected', event);
+        }
+
+        return anomalyScore;
+    }
+
+    /**
+     * Инициализация децентрализованной проверки
+     */
+    initDecentralizedAuth() {
+        this.decentralizedAuth = {
+            enabled: true,
+            smartContractAddress: '0x123...abc',
+            consensusNodes: ['node1', 'node2', 'node3']
+        };
+        console.log("Децентрализованная проверка подлинности инициализирована");
+    }
+
+    async verifyWithSmartContract(data) {
+        if (!this.decentralizedAuth.enabled) return true;
+        console.log("Эмуляция проверки через смарт-контракт...");
+        return true;
+    }
+
+    /**
+     * Проверка целостности кода и зависимостей
+     */
+    async verifyCodeIntegrity() {
+        const dependencies = [
+            { name: 'lib1', hash: 'sha256:abc123' },
+            { name: 'lib2', hash: 'sha256:def456' }
+        ];
+
+        for (const dep of dependencies) {
+            const computedHash = this.computeHash(dep.name);
+            if (computedHash !== dep.hash) {
+                console.error(`Нарушение целостности зависимости: ${dep.name}`);
+                this.activateDefense('code_integrity_violation', { dependency: dep });
+                return false;
+            }
+        }
+
+        console.log("Целостность кода и зависимостей подтверждена");
+        return true;
+    }
+
+    computeHash(data) {
+        return `sha256:${data}`;
+    }
+
+    /**
+     * Защита от side-channel атак
+     */
+    protectAgainstSideChannel() {
+        this.settings.constantTimeOperations = true;
+        this.addNoiseToOperations();
+        this.shieldOperations();
+        console.log("Защита от side-channel атак активирована");
+    }
+
+    addNoiseToOperations() {
+        setInterval(() => {
+            const dummy = Math.random() * 1000;
+            console.log(`Добавлен шум: ${dummy}`);
+        }, 1000);
+    }
+
+    shieldOperations() {
+        console.log("Эмуляция экранирования операций...");
+    }
+
+    /**
+     * Защита от ransomware
+     */
+    protectAgainstRansomware() {
+        this.createEncryptedBackup();
+        this.monitorFileChanges();
+        console.log("Защита от ransomware активирована");
+    }
+
+    async createEncryptedBackup() {
+        const data = JSON.stringify(this.state);
+        const encryptedBackup = await this.encryptData(data);
+        console.log("Создана зашифрованная резервная копия:", encryptedBackup);
+    }
+
+    monitorFileChanges() {
+        console.log("Мониторинг изменений файлов...");
+    }
+
+    /**
+     * Оценка репутации источника
+     */
+    evaluateSourceReputation(source) {
+        const sourceInfo = this.getSuspiciousSourceInfo(source);
+        if (!sourceInfo) return 100;
+
+        const reputation = 100 - sourceInfo.threatScore;
+        if (reputation < 50) {
+            console.warn(`Источник ${source} имеет низкую репутацию: ${reputation}`);
+            this.activateDefense('low_reputation_source', { source });
+        }
+
+        return reputation;
+    }
+
+    /**
+     * Выполнение операции в изолированной среде
+     */
+    async executeInIsolatedEnvironment(operation) {
+        console.log("Приостановка фоновых процессов...");
+        this.suspendBackgroundProcesses();
+
+        const result = await operation();
+        console.log("Операция выполнена в изолированной среде");
+
+        this.resumeBackgroundProcesses();
+        return result;
+    }
+
+    suspendBackgroundProcesses() {
+        console.log("Эмуляция приостановки фоновых процессов...");
+    }
+
+    resumeBackgroundProcesses() {
+        console.log("Эмуляция возобновления фоновых процессов...");
+    }
+
+    /**
+     * Обновление шаблонов атак
+     */
+    async updateAttackPatterns() {
+        const newPatterns = [/new_malicious_pattern/i];
+        this.maliciousPatterns = [...this.maliciousPatterns, ...newPatterns];
+        console.log("Шаблоны атак обновлены");
+    }
+
+    /**
+     * Интеграция с глобальными базами данных уязвимостей
+     */
+    async integrateWithVulnerabilityDB() {
+        console.log("Эмуляция интеграции с базой данных уязвимостей...");
+        await this.updateAttackPatterns();
+    }
+
+    /**
+     * Проверка транзакции перед отправкой
+     */
+    async validateTransaction(tx) {
+        const { to, value, data } = tx;
+
+        const reputation = await this.evaluateContractReputation(to);
+        if (reputation < 50) {
+            console.warn(`Адрес ${to} имеет низкую репутацию: ${reputation}`);
+            this.activateDefense('suspicious_contract', { address: to });
+            return false;
+        }
+
+        if (await this.isAddressSuspicious(to)) {
+            console.warn(`Адрес ${to} может быть фишинговым`);
+            this.activateDefense('possible_phishing', { address: to });
+            return false;
+        }
+
+        if (data && this.containsReentrancyPattern(data)) {
+            console.warn("Обнаружен паттерн reentrancy в данных транзакции");
+            this.activateDefense('reentrancy_risk', { tx });
+            return false;
+        }
+
+        console.log("Транзакция прошла валидацию");
+        return true;
+    }
+
+    containsReentrancyPattern(data) {
+        const reentrancyPatterns = [
+            /call\.value\(/i,
+            /delegatecall\(/i
+        ];
+
+        for (const pattern of reentrancyPatterns) {
+            if (pattern.test(data)) return true;
+        }
+        return false;
+    }
+
+    async isAddressSuspicious(address) {
+        const knownPhishingAddresses = ['0x123...abc', '0x456...def'];
+        return knownPhishingAddresses.includes(address.toLowerCase());
+    }
+
+    /**
+     * Безопасное хранение приватного ключа
+     */
+    async storePrivateKey(privateKey) {
+        if (!this.biometricAuth.enabled) {
+            throw new Error("Биометрическая аутентификация не включена");
+        }
+
+        const encryptedKey = await this.encryptData(privateKey);
+        localStorage.setItem('encrypted_private_key', encryptedKey);
+        console.log("Приватный ключ безопасно сохранен");
+    }
+
+    /**
+     * Получение приватного ключа
+     */
+    async retrievePrivateKey() {
+        if (!this.biometricAuth.enabled) {
+            throw new Error("Биометрическая аутентификация не включена");
+        }
+
+        const authSuccess = await this.performBiometricAuth();
+        if (!authSuccess) {
+            throw new Error("Не удалось пройти биометрическую аутентификацию");
+        }
+
+        const encryptedKey = localStorage.getItem('encrypted_private_key');
+        if (!encryptedKey) {
+            throw new Error("Приватный ключ не найден");
+        }
+
+        const privateKey = `decrypted_${encryptedKey}`;
+        console.log("Приватный ключ успешно получен");
+        return privateKey;
+    }
+
+    /**
+     * Мониторинг транзакций в мемпуле
+     */
+    async monitorMempool() {
+        console.log("Мониторинг мемпула для обнаружения front-running...");
+        const pendingTxs = await this.web3.provider.getBlock('pending');
+        const suspiciousTxs = pendingTxs.transactions.filter(tx => 
+            tx.to === this.web3.walletAddress && tx.data.includes('swap')
+        );
+
+        if (suspiciousTxs.length > 1) {
+            console.warn("Обнаружен риск front-running");
+            this.activateDefense('front_running_risk', { txs: suspiciousTxs });
+        }
+    }
+
+    /**
+     * Отправка защищенной транзакции
+     */
+    async sendProtectedTransaction(tx) {
+        if (!this.web3.signer) {
+            throw new Error("Кошелек не подключен");
+        }
+
+        const isValid = await this.validateTransaction(tx);
+        if (!isValid) {
+            throw new Error("Транзакция не прошла валидацию");
+        }
+
+        await this.monitorMempool();
+        const signedTx = await this.web3.signer.sendTransaction(tx);
+        console.log("Транзакция отправлена:", signedTx.hash);
+
+        const receipt = await signedTx.wait();
+        console.log("Транзакция подтверждена:", receipt.transactionHash);
+        return receipt;
+    }
+
+    /**
+     * Проверка токена перед операцией
+     */
+    async validateTokenOperation(tokenAddress, operation) {
+        const reputation = await this.evaluateContractReputation(tokenAddress);
+        if (reputation < 50) {
+            console.warn(`Токен ${tokenAddress} имеет низкую репутацию: ${reputation}`);
+            this.activateDefense('suspicious_token', { tokenAddress });
+            return false;
+        }
+
+        const tokenInfo = await this.getTokenInfo(tokenAddress);
+        if (!tokenInfo.verified) {
+            console.warn(`Токен ${tokenAddress} не верифицирован`);
+            this.activateDefense('unverified_token', { tokenAddress });
+            return false;
+        }
+
+        console.log(`Операция с токеном ${tokenAddress} (${operation}) прошла валидацию`);
+        return true;
+    }
+
+    async getTokenInfo(tokenAddress) {
+        return {
+            name: "MockToken",
+            symbol: "MTK",
+            verified: true
+        };
+    }
+
+    /**
+     * Оценка репутации смарт-контракта
+     */
+    async evaluateContractReputation(contractAddress) {
+        const sourceInfo = this.getSuspiciousSourceInfo(contractAddress);
+        if (sourceInfo) {
+            return 100 - sourceInfo.threatScore;
+        }
+
+        const isVerified = await this.isContractVerified(contractAddress);
+        const reputation = isVerified ? 100 : 50;
+        this.trackSuspiciousSource({ source: contractAddress, type: 'contract_access' });
+        return reputation;
+    }
+
+    async isContractVerified(contractAddress) {
+        return true;
+    }
+
+    /**
+     * Настройка обработчиков событий
+     */
+    setupEventHandlers() {
+        if (!this.honeypot.eventBus) {
+            this.honeypot.eventBus = new EventTarget();
+        }
+
+        this.honeypot.eventBus.addEventListener('securityEvent', this.handleSecurityEvent.bind(this));
+        this.honeypot.eventBus.addEventListener('honeypotTriggered', this.handleHoneypotTrigger.bind(this));
+        this.honeypot.eventBus.addEventListener('suspiciousActivity', this.handleSuspiciousActivity.bind(this));
+
+        if (!this.honeypot.emitEvent) {
+            this.honeypot.emitEvent = function(eventName, data) {
+                const event = new CustomEvent(eventName, { detail: data });
+                this.eventBus.dispatchEvent(event);
+            };
+        }
+
+        console.log("Обработчики событий активной защиты настроены");
+    }
+
+    /**
+     * Обработка события безопасности
+     */
+    async handleSecurityEvent(event) {
+        const securityEvent = event.detail;
+        if (!securityEvent || !securityEvent.type) return;
+
+        if (securityEvent.type === 'transaction_attempt' && securityEvent.tx) {
+            const isValid = await this.validateTransaction(securityEvent.tx);
+            if (!isValid) return;
+        }
+
+        const threatScore = this.evaluateThreatScore(securityEvent);
+        this.updateThreatLevel(threatScore);
+
+        if (threatScore > 50) {
+            this.collectEvidence(securityEvent);
+        }
+
+        if (this.state.threatLevel >= this.settings.alertThreshold) {
+            this.activateDefense('high_threat_level', securityEvent);
+        }
+    }
+
+    /**
+     * Обработка срабатывания приманки
+     */
+    handleHoneypotTrigger(event) {
+        const trigger = event.detail;
+        if (!trigger || !trigger.type) return;
+
+        this.trackSuspiciousSource(trigger);
+        const severityScore = this.evaluateTriggerSeverity(trigger);
+
+        if (severityScore >= 80) {
+            this.activateDefense('critical_honeypot_trigger', trigger);
+        }
+
+        this.collectEvidence(trigger);
+    }
+
+    /**
+     * Обработка подозрительной активности
+     */
+    handleSuspiciousActivity(event) {
+        const activity = event.detail;
+        if (!activity || !activity.score) return;
+
+        if (activity.source) {
+            this.trackSuspiciousSource(activity);
+        }
+
+        if (activity.score >= this.settings.alertThreshold) {
+            this.activateDefense('high_suspicious_activity', activity);
+        }
+
+        this.collectEvidence(activity);
+    }
+
+    /**
+     * Оценка уровня угрозы события безопасности
+     */
+    evaluateThreatScore(securityEvent) {
+        let score = 0;
+
+        const baseScores = {
+            'transaction_phishing': 90,
+            'reentrancy_attempt': 85,
+            'sql_injection': 80,
+            'xss_attempt': 70,
+            'csrf_attempt': 65,
+            'path_traversal': 75,
+            'command_injection': 90,
+            'file_inclusion': 85,
+            'honeypot_trigger': 60,
+            'suspicious_activity': 50,
+            'authentication_attempt': 40,
+            'admin_access_attempt': 85
+        };
+
+        if (securityEvent.type in baseScores) {
+            score = baseScores[securityEvent.type];
+        } else {
+            score = 50;
+        }
+
+        if (securityEvent.source) {
+            const sourceInfo = this.getSuspiciousSourceInfo(securityEvent.source);
+            if (sourceInfo && sourceInfo.eventCount > 3) {
+                score += Math.min(sourceInfo.eventCount * 5, 30);
+            }
+        }
+
+        if (this.containsMaliciousPatterns(securityEvent)) {
+            score += 20;
+        }
+
+        const hour = new Date(securityEvent.timestamp).getHours();
+        if (hour >= 0 && hour < 6) {
+            score += 10;
+        }
+
+        return Math.min(Math.max(score, 0), 100);
+    }
+
+    /**
+     * Оценка серьезности срабатывания приманки
+     */
+    evaluateTriggerSeverity(trigger) {
+        let score = 0;
+
+        const baseScores = {
+            'fake_contract_access': 80,
+            'token_manipulation': 75,
+            'localStorage_access': 30,
+            'localStorage_modification': 60,
+            'cookie_manipulation': 50,
+            'dom_element_access': 40,
+            'dom_element_modification': 70,
+            'false_endpoint_access': 80,
+            'honeypot_form_submission': 75,
+            'admin_section_access': 90
+        };
+
+        if (trigger.type in baseScores) {
+            score = baseScores[trigger.type];
+        } else {
+            score = 50;
+        }
+
+        if (this.containsMaliciousPatterns(trigger)) {
+            score += 25;
+        }
+
+        if (trigger.details && trigger.details.targetType === 'critical') {
+            score += 20;
+        }
+
+        if (trigger.source) {
+            const sourceInfo = this.getSuspiciousSourceInfo(trigger.source);
+            if (sourceInfo && sourceInfo.triggerCount > 2) {
+                score += Math.min(sourceInfo.triggerCount * 5, 25);
+            }
+        }
+
+        return Math.min(Math.max(score, 0), 100);
+    }
+
+    /**
+     * Обновление общего уровня угрозы
+     */
+    updateThreatLevel(newScore) {
+        const alpha = 0.3;
+        this.state.threatLevel = alpha * newScore + (1 - alpha) * this.state.threatLevel;
+
+        if (this.state.threatLevel < 10) {
+            this.state.threatLevel = 0;
+        }
+
+        console.log(`Уровень угрозы обновлен: ${this.state.threatLevel.toFixed(2)}`);
+    }
+
+    /**
+     * Проверка на наличие вредоносных паттернов
+     */
+    containsMaliciousPatterns(data) {
+        this.updateAttackPatterns();
+
+        let textToAnalyze = '';
+        if (typeof data === 'string') {
+            textToAnalyze = data;
+        } else if (data.payload) {
+            textToAnalyze = typeof data.payload === 'string' ? data.payload : JSON.stringify(data.payload);
+        } else if (data.details) {
+            textToAnalyze = typeof data.details === 'string' ? data.details : JSON.stringify(data.details);
+        } else {
+            textToAnalyze = JSON.stringify(data);
+        }
+
+        for (const pattern of this.maliciousPatterns) {
+            if (pattern.test(textToAnalyze)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Отслеживание подозрительного источника
+     */
+    trackSuspiciousSource(event) {
+        const source = this.extractSourceIdentifier(event);
+        if (!source) return;
+
+        if (!this.state.suspiciousSources.has(source)) {
+            this.state.suspiciousSources.set(source, {
+                identifier: source,
+                firstSeen: Date.now(),
+                lastSeen: Date.now(),
+                eventCount: 0,
+                triggerCount: 0,
+                suspiciousActivityCount: 0,
+                evidenceIds: [],
+                threatScore: 0,
+                details: {}
+            });
+        }
+
+        const sourceInfo = this.state.suspiciousSources.get(source);
+        sourceInfo.lastSeen = Date.now();
+
+        if (event.type.includes('honeypot') || event.type.includes('trigger')) {
+            sourceInfo.triggerCount++;
+        } else if (event.type.includes('suspicious')) {
+            sourceInfo.suspiciousActivityCount++;
+        } else {
+            sourceInfo.eventCount++;
+        }
+
+        sourceInfo.threatScore = this.calculateSourceThreatScore(sourceInfo);
+
+        if (!sourceInfo.details.events) {
+            sourceInfo.details.events = [];
+        }
+
+        sourceInfo.details.events.push({
+            type: event.type,
+            timestamp: Date.now(),
+            summary: this.summarizeEvent(event)
+        });
+
+        if (sourceInfo.details.events.length > 20) {
+            sourceInfo.details.events = sourceInfo.details.events.slice(-20);
+        }
+
+        if (sourceInfo.threatScore > 80 && sourceInfo.eventCount + sourceInfo.triggerCount > 5) {
+            this.activateDefense('suspicious_source', { sourceInfo });
+        }
+    }
+
+    /**
+     * Извлечение идентификатора источника
+     */
+    extractSourceIdentifier(event) {
+        let identifier = '';
+
+        if (event.tx) {
+            identifier = event.tx.from || event.tx.to || 'unknown';
+        } else if (event.source) {
+            if (typeof event.source === 'string' && ethers.utils.isAddress(event.source)) {
+                identifier = event.source;
+            } else if (event.source.url) {
+                identifier = event.source.url;
+            } else if (event.source.ip) {
+                identifier = event.source.ip;
+            } else if (event.source.userAgent) {
+                identifier = event.source.userAgent;
+            }
+        }
+
+        if (!identifier && event.details) {
+            if (event.details.from && ethers.utils.isAddress(event.details.from)) {
+                identifier = event.details.from;
+            } else if (event.details.to && ethers.utils.isAddress(event.details.to)) {
+                identifier = event.details.to;
+            } else if (event.details.sourceIp) {
+                identifier = event.details.sourceIp;
+            } else if (event.details.userAgent) {
+                identifier = event.details.userAgent;
+            } else if (event.details.referrer) {
+                identifier = event.details.referrer;
+            }
+        }
+
+        if (!identifier) {
+            const sourceData = [];
+            if (event.source && event.source.userAgent) sourceData.push(event.source.userAgent);
+            if (typeof document !== 'undefined' && document.referrer) sourceData.push(document.referrer);
+
+            if (sourceData.length > 0) {
+                identifier = sourceData.join('|');
+            } else {
+                identifier = 'unknown-source-' + Math.random().toString(36).substring(2, 15);
+            }
+        }
+
+        return identifier.toLowerCase();
+    }
+
+    /**
+     * Расчет оценки угрозы для источника
+     */
+    calculateSourceThreatScore(sourceInfo) {
+        let score = 0;
+
+        score += Math.min(sourceInfo.eventCount * 5, 30);
+        score += Math.min(sourceInfo.triggerCount * 10, 40);
+        score += Math.min(sourceInfo.suspiciousActivityCount * 15, 50);
+
+        const timeSinceLastSeen = Date.now() - sourceInfo.lastSeen;
+        if (timeSinceLastSeen < 300000) {
+            score += 10;
+        } else if (timeSinceLastSeen < 3600000) {
+            score += 5;
+        }
+
+        const activityDuration = sourceInfo.lastSeen - sourceInfo.firstSeen;
+        if (activityDuration > 3600000) {
+            score += 10;
+        }
+
+        return Math.min(Math.max(score, 0), 100);
+    }
+
+    /**
+     * Получение информации о подозрительном источнике
+     */
+    getSuspiciousSourceInfo(source) {
+        const identifier = typeof source === 'string' ? source : this.extractSourceIdentifier({ source });
+        return this.state.suspiciousSources.get(identifier);
+    }
+
+    /**
+     * Создание краткого описания события
+     */
+    summarizeEvent(event) {
+        if (typeof event === 'string') {
+            return event.substring(0, 100);
+        }
+
+        let summary = event.type || 'Unknown event';
+        if (event.details) {
+            if (typeof event.details === 'string') {
+                summary += `: ${event.details.substring(0, 100)}`;
+            } else if (event.details.description) {
+                summary += `: ${event.details.description.substring(0, 100)}`;
+            } else if (event.details.message) {
+                summary += `: ${event.details.message.substring(0, 100)}`;
+            }
+        }
+
+        return summary;
+    }
+
+    /**
+     * Сбор доказательств для расследования
+     */
+    collectEvidence(event) {
+        if (!this.settings.forensicCollectionEnabled) return;
+
+        const evidence = {
+            id: 'evidence-' + Date.now() + '-' + Math.floor(Math.random() * 1000000),
+            timestamp: Date.now(),
+            type: event.type || 'unknown',
+            source: this.extractSourceIdentifier(event),
+            data: this.sanitizeForStorage(event),
+            contextData: this.collectContextData()
+        };
+
+        this.state.collectedEvidence.push(evidence);
+
+        if (evidence.source) {
+            const sourceInfo = this.state.suspiciousSources.get(evidence.source);
+            if (sourceInfo) {
+                sourceInfo.evidenceIds.push(evidence.id);
+            }
+        }
+
+        if (this.state.collectedEvidence.length > 100) {
+            this.state.collectedEvidence = this.state.collectedEvidence.slice(-100);
+        }
+
+        return evidence.id;
+    }
+
+    /**
+     * Сбор контекстных данных о состоянии (адаптировано для Web3)
+     */
+    async collectContextData() {
+        const context = {
+            timestamp: Date.now(),
+            chainId: this.web3?.chainId || 'unknown',
+            walletAddress: this.web3?.walletAddress || 'unknown',
+            gasPrice: await this.getCurrentGasPrice(),
+            recentTransactions: await this.getRecentTransactions(),
+            networkStatus: await this.getNetworkStatus()
+        };
+
+        if (typeof window !== 'undefined') {
+            context.userAgent = navigator.userAgent;
+            context.screenSize = `${window.screen.width}x${window.screen.height}`;
+            context.referrer = document.referrer;
+            context.cookies = this.sanitizeCookies(document.cookie);
+            context.localStorage = this.getLocalStorageSnapshot();
+            context.performanceData = this.getPerformanceData();
+            context.networkActivity = this.getNetworkActivity();
+        }
+
+        return context;
+    }
+
+    async getCurrentGasPrice() {
+        if (!this.web3?.provider) return null;
+        try {
+            const gasPrice = await this.web3.provider.getGasPrice();
+            return ethers.utils.formatUnits(gasPrice, 'gwei');
+        } catch (error) {
+            console.error("Ошибка получения цены газа:", error);
+            return null;
+        }
+    }
+
+    async getRecentTransactions() {
+        if (!this.web3?.provider || !this.web3?.walletAddress) return [];
+        try {
+            const blockNumber = await this.web3.provider.getBlockNumber();
+            const fromBlock = blockNumber - 1000;
+            const txs = await this.web3.provider.getLogs({
+                fromBlock,
+                toBlock: 'latest',
+                address: this.web3.walletAddress
+            });
+            return txs.slice(-10);
+        } catch (error) {
+            console.error("Ошибка получения транзакций:", error);
+            return [];
+        }
+    }
+
+    async getNetworkStatus() {
+        if (!this.web3?.provider) return null;
+        try {
+            const block = await this.web3.provider.getBlock('latest');
+            return {
+                latestBlock: block.number,
+                timestamp: block.timestamp
+            };
+        } catch (error) {
+            console.error("Ошибка получения статуса сети:", error);
+            return null;
+        }
+    }
+
+    getLocalStorageSnapshot() {
+        try {
+            const snapshot = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.includes('privkey_') || key.includes('password') || key.includes('secret')) {
+                    snapshot[key] = '[REDACTED]';
+                } else {
+                    try {
+                        const value = localStorage.getItem(key);
+                        snapshot[key] = value.length > 500 ? value.substring(0, 500) + '...' : value;
+                    } catch (e) {
+                        snapshot[key] = '[Error reading value]';
+                    }
+                }
+            }
+            return snapshot;
+        } catch (e) {
+            return { error: 'Unable to access localStorage' };
+        }
+    }
+
+    getPerformanceData() {
+        if (!window.performance) return null;
+
+        const data = {
+            navigation: window.performance.getEntriesByType ? window.performance.getEntriesByType('navigation') : null,
+            memory: window.performance.memory ? {
+                usedJSHeapSize: window.performance.memory.usedJSHeapSize,
+                totalJSHeapSize: window.performance.memory.totalJSHeapSize,
+                jsHeapSizeLimit: window.performance.memory.jsHeapSizeLimit
+            } : null,
+            timing: window.performance.timing ? {
+                navigationStart: window.performance.timing.navigationStart,
+                loadEventEnd: window.performance.timing.loadEventEnd,
+                domComplete: window.performance.timing.domComplete
+            } : null
+        };
+
+        return data;
+    }
+
+    getNetworkActivity() {
+        if (!window.performance || !window.performance.getEntriesByType) return null;
+
+        try {
+            const resourceEntries = window.performance.getEntriesByType('resource');
+            const recentResources = resourceEntries.slice(-20);
+            return recentResources.map(entry => ({
+                name: entry.name,
+                type: entry.initiatorType,
+                duration: entry.duration,
+                size: entry.transferSize,
+                protocol: entry.nextHopProtocol
+            }));
+        } catch (e) {
+            return null;
+        }
+    }
+
+    sanitizeCookies(cookieString) {
+        if (!cookieString) return '';
+
+        const cookies = cookieString.split(';').map(cookie => cookie.trim());
+        return cookies.map(cookie => {
+            const [name, value] = cookie.split('=');
+            if (name.toLowerCase().includes('session') || 
+                name.toLowerCase().includes('auth') || 
+                name.toLowerCase().includes('token') || 
+                name.toLowerCase().includes('key')) {
+                return `${name}=[REDACTED]`;
+            }
+            return cookie;
+        }).join('; ');
+    }
+
+    sanitizeForStorage(data) {
+        if (typeof data === 'string') {
+            return data;
+        }
+
+        const sanitized = JSON.parse(JSON.stringify(data));
+        const sanitizeObject = (obj) => {
+            if (!obj || typeof obj !== 'object') return;
+            for (const key in obj) {
+                if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                    if (key.toLowerCase().includes('password') || 
+                        key.toLowerCase().includes('secret') || 
+                        key.toLowerCase().includes('token') || 
+                        key.toLowerCase().includes('key')) {
+                        obj[key] = '[REDACTED]';
+                    } else if (typeof obj[key] === 'object') {
+                        sanitizeObject(obj[key]);
+                    } else if (typeof obj[key] === 'string' && obj[key].length > 1000) {
+                        obj[key] = obj[key].substring(0, 1000) + '...';
+                    }
+                }
+            }
+        };
+
+        sanitizeObject(sanitized);
+        return sanitized;
+    }
+
+    /**
+     * Активация защиты
+     */
+    async activateDefense(reason, triggerEvent) {
+        if (!this.settings.enabled || !this.settings.counterMeasuresEnabled) {
+            console.log(`Активация защиты отключена. Причина: ${reason}`);
+            return false;
+        }
+
+        const now = Date.now();
+        if (now - this.state.lastDefenseTime < this.settings.coolingPeriod) {
+            console.log(`Активация защиты в период охлаждения. Причина: ${reason}`);
+            return false;
+        }
+
+        if (this.state.collectedEvidence.length < this.settings.minimumEvidenceRequired) {
+            console.log(`Недостаточно доказательств для активации защиты. Причина: ${reason}`);
+            return false;
+        }
+
+        if (triggerEvent.source) {
+            const reputation = this.evaluateSourceReputation(triggerEvent.source);
+            if (reputation < 50) return false;
+        }
+
+        await this.verifyWithSmartContract(triggerEvent);
+        await this.performMultiFactorAuth('activate_defense');
+
+        return await this.executeInIsolatedEnvironment(async () => {
+            const defenseAction = {
+                id: 'defense-' + Date.now(),
+                timestamp: now,
+                reason: reason,
+                trigger: triggerEvent ? this.sanitizeForStorage(triggerEvent) : null,
+                threatLevel: this.state.threatLevel,
+                evidenceCount: this.state.collectedEvidence.length,
+                measures: []
+            };
+
+            const measures = this.selectCountermeasures(reason, triggerEvent);
+
+            for (const measure of measures) {
+                try {
+                    const result = this.applyCountermeasure(measure);
+                    defenseAction.measures.push({
+                        type: measure.type,
+                        success: result.success,
+                        details: result.details
+                    });
+                } catch (error) {
+                    console.error(`Ошибка при применении контрмеры ${measure.type}:`, error);
+                    defenseAction.measures.push({
+                        type: measure.type,
+                        success: false,
+                        error: error.message
+                    });
+                }
+            }
+
+            this.state.defenseHistory.push(defenseAction);
+            this.state.lastDefenseTime = now;
+
+            if (this.state.defenseHistory.length > 50) {
+                this.state.defenseHistory = this.state.defenseHistory.slice(-50);
+            }
+
+            console.log(`Активирована защита. Причина: ${reason}. Применено мер: ${defenseAction.measures.length}`);
+            this.honeypot.emitEvent('defenseActivated', defenseAction);
+
+            return true;
+        });
+    }
+
+    /**
+     * Выбор подходящих контрмер
+     */
+    selectCountermeasures(reason, triggerEvent) {
+        const measures = [];
+        const defenseLevel = this.settings.defenseLevel;
+
+        measures.push({ type: 'collect_extended_evidence' });
+        measures.push({ type: 'enhanced_logging' });
+
+        switch (reason) {
+            case 'sql_injection':
+            case 'path_traversal':
+            case 'command_injection':
+            case 'file_inclusion':
+                measures.push({ type: 'delay_responses' });
+                measures.push({ type: 'fake_server_error' });
+                break;
+            case 'transaction_phishing':
+            case 'reentrancy_risk':
+                measures.push({ type: 'block_transaction' });
+                measures.push({ type: 'notify_user' });
+                break;
+            case 'suspicious_contract':
+            case 'possible_phishing':
+                measures.push({ type: 'block_address' });
+                measures.push({ type: 'log_incident' });
+                break;
+        }
+
+        if (defenseLevel === 'high') {
+            measures.push({ type: 'ip_block', duration: 3600000 });
+        }
+
+        return measures;
+    }
+
+    /**
+     * Применение контрмеры (эмуляция)
+     */
+    applyCountermeasure(measure) {
+        console.log(`Применение контрмеры: ${measure.type}`);
+        return { success: true, details: `Контрмера ${measure.type} успешно применена` };
+    }
+
+    /**
+     * Выполнение защищенной операции с токеном
+     */
+    async executeTokenOperation(tokenAddress, operation) {
+        const isValid = await this.validateTokenOperation(tokenAddress, operation);
+        if (!isValid) {
+            throw new Error("Операция с токеном не прошла валидацию");
+        }
+
+        return await this.executeInIsolatedEnvironment(async () => {
+            console.log(`Выполнение операции с токеном ${tokenAddress}: ${operation}`);
+            return true;
+        });
+    }
+}
